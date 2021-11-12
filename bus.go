@@ -22,14 +22,3 @@ func (b *Bus) read(addr uint16) uint8 {
 	}
 	return 0
 }
-
-func (b *Bus) read16(addr uint16) uint16 {
-	hi := b.read(addr)
-	lo := b.read(addr + 1)
-
-	var result uint16
-	result |= uint16(hi) //add high bits
-	result <<= 8         //shift to high bits
-	result |= uint16(lo) //add low bits
-	return result
-}
