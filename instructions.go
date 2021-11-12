@@ -26,24 +26,30 @@ func (h *H6502) Fetch() {
 	}
 }
 
+func (h *H6502) ADC() {
+	h.Fetch()
+	var temp uint16 = uint16(h.A) + uint16(h.fetched) + uint16(btou(h.getStat(C)))
+	h.setStat(C, (temp&0x100) != 0)
+	h.setStat(Z, (temp&0xFF) == 0)
+	h.setStat(V) //overflow flag
+	h.setStat(N, (temp&0x80) != 0)
+	h.A = uint8(temp & 0xFF)
+}
+
+func (h *H6502) AND() {
+	h.Fetch()
+	h.A &= h.fetched
+	h.setStat(Z, h.A == 0)
+	h.setStat(N, (h.A&0x80) != 0)
+}
+
 func (h *H6502) LDA() {
 	h.Fetch()
 	h.A = h.fetched
 	if h.A == 0 {
 		h.setStat(Z, true)
 	}
-	if (h.A & 0x80) == 1 {
-		h.setStat(N, true)
-	}
-}
-
-func (h *H6502) AND() {
-	h.Fetch()
-	h.A &= h.fetched
-	if h.A == 0 {
-		h.setStat(Z, true)
-	}
-	if (h.A & 0x80) == 1 {
+	if (h.A & 0x80) != 0 {
 		h.setStat(N, true)
 	}
 }
