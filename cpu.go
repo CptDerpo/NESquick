@@ -91,7 +91,3 @@ func (h *H6502) write(addr uint16, data uint8) {
 func (h *H6502) read(addr uint16) uint8 {
 	return h.bus.read(addr)
 }
-
-func (h *H6502) read16(addr uint16) uint16 {
-	return h.bus.read16(addr)
-}

@@ -100,7 +100,7 @@ func (h *H6502) REL() {
 	h.branchoffset = uint16(h.read(h.PC))
 	h.PC++
 	//careful signed, can jump forward and backwards (7th bit is sign bit)
-	if (h.branchoffset & 0x80) != 0 { //if signed byte
+	if (h.branchoffset & 0x80) > 0 { //if signed byte
 		h.branchoffset |= 0xFF00
 	}
 	h.extracyclesaddr = false
