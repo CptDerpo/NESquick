@@ -3,12 +3,7 @@ package main
 import "fmt"
 
 const (
-	modeImmediate = iota + 1
-	modeZeroPage
-	modeZeroPageX
-	modeAbsolute
-	modeAbsoluteX
-	modeAbsoluteY
+	LDA = iota + 1
 )
 
 // Status flag ids
@@ -22,23 +17,6 @@ const (
 	N            //Negative flag (if bit 7 set to 1)
 )
 
-// Instruction ids
-const (
-	LDA = iota + 1
-)
-
-type Instruction struct {
-	id       uint8 //id of inst
-	opcode   uint8 //current inst opcode
-	cycles   uint8 //cycles remaining for inst
-	size     uint8 //size of instruction
-	addrmode uint8 //addressing mode of inst
-}
-
-var InstructionTable = map[uint8]Instruction{
-	0xA9: {LDA, 0xA9, 2, 2, modeImmediate},
-}
-
 type H6502 struct {
 	bus *Bus //16 bit address bus
 
@@ -49,15 +27,32 @@ type H6502 struct {
 	PC uint16 //Program Counter
 	SP uint8  //Stack Pointer
 
-	instruction *Instruction //stores the instruction
-	op1         uint8        //operand for 2 byte instructions
-	op2         uint16       //operand for 3 byte instructions
+	instruction      *Instruction //stores the instruction
+	cycles           uint8        //cycles left for instruction
+	fetched          uint8        //fetched data from instruction
+	extracyclesaddr  bool
+	extracyclesinstr bool
+
+	operandaddr  uint16 //address of operand data location
+	branchoffset uint16
 
 	STATREG uint8 //statusregister
 }
 
+func (h *H6502) Clock() {
+	if h.cycles == 0 {
+		h.read(h.PC)
+		h.PC++
+		h.cycles = h.instruction.cycles
+
+		h.instruction.addrfunc(h)
+		h.instruction.instfunc(h)
+	}
+	h.cycles--
+}
+
 func (h *H6502) Print() {
-	fmt.Printf("A: %X,  Y: %X, X: %X\nPC: %X, SP: %X\nop1: %X, op2: %X, STATREG: %X\n\n", h.A, h.Y, h.X, h.PC, h.SP, h.op1, h.op2, h.STATREG)
+	fmt.Printf("A: %X,  Y: %X, X: %X\nPC: %X, SP: %X\nfetched: %X, STATREG: %X\n\n", h.A, h.Y, h.X, h.PC, h.SP, h.fetched, h.STATREG)
 }
 
 func (h *H6502) setStat(register uint8, status bool) {
@@ -68,6 +63,10 @@ func (h *H6502) setStat(register uint8, status bool) {
 	}
 }
 
+func (h *H6502) getStat(stat uint8) bool {
+	return ((h.STATREG >> stat) & 1) == 1
+}
+
 func (h *H6502) Reset() {
 	h.PC = 0x0000
 	h.SP = 0x00FF //do startup routine
@@ -75,27 +74,10 @@ func (h *H6502) Reset() {
 
 func (h *H6502) Step() {
 	h.ReadInstruction(h.read(h.PC))
-	h.Execute()
+	h.PC++
+	h.instruction.addrfunc(h)
+	h.instruction.instfunc(h)
 	h.Print()
-}
-
-func (h *H6502) ReadInstruction(opcode uint8) {
-	ins := InstructionTable[opcode]
-	h.instruction = &ins
-	if ins.size == 2 {
-		h.op1 = h.read(h.PC + 1)
-	} else if ins.size == 3 {
-		h.op2 = h.read16(h.PC + 1)
-	} else {
-		h.op1, h.op2 = 0, 0
-	}
-}
-
-func (h *H6502) Execute() {
-	switch h.instruction.id {
-	case LDA:
-		h.LDA()
-	}
 }
 
 func (h *H6502) connectBus(b *Bus) {
@@ -112,13 +94,4 @@ func (h *H6502) read(addr uint16) uint8 {
 
 func (h *H6502) read16(addr uint16) uint16 {
 	return h.bus.read16(addr)
-}
-
-func (h *H6502) LDA() {
-	switch h.instruction.addrmode {
-	case modeImmediate:
-		h.A = h.op1
-		h.setStat(N, true)
-		h.setStat(Z, true)
-	}
 }
