@@ -63,7 +63,7 @@ func (h *H6502) ABX() {
 	h.PC++
 	h.operandaddr += uint16(h.X)
 
-	if (h.operandaddr & 0xFF00) != (hi << 8) { //check if high bytes (page) changed or not
+	if (h.operandaddr & 0xFF00) != hi { //check if high bytes (page) changed or not
 		h.extracyclesaddr = true
 	} else {
 		h.extracyclesaddr = false
@@ -79,7 +79,7 @@ func (h *H6502) ABY() {
 	h.PC++
 	h.operandaddr += uint16(h.Y)
 
-	if (h.operandaddr & 0xFF00) != (hi << 8) { //check if high bytes (page) changed or not
+	if (h.operandaddr & 0xFF00) != hi { //check if high bytes (page) changed or not
 		h.extracyclesaddr = true
 	} else {
 		h.extracyclesaddr = false
@@ -104,4 +104,28 @@ func (h *H6502) REL() {
 		h.branchoffset |= 0xFF00
 	}
 	h.extracyclesaddr = false
+}
+
+func (h *H6502) IZX() {
+	temp := uint16(h.read(h.PC))
+	h.PC++
+	lo := uint16(h.read((temp + uint16(h.X)) & 0xFF))
+	hi := uint16(h.read((temp + 1 + uint16(h.X)) & 0xFF))
+	h.operandaddr = (hi << 8) | lo
+	h.extracyclesaddr = false
+}
+
+func (h *H6502) IZY() {
+	temp := uint16(h.read(h.PC))
+	h.PC++
+	lo := uint16(h.read((temp) & 0xFF))
+	hi := uint16(h.read((temp + 1) & 0xFF))
+	h.operandaddr = (hi << 8) | lo
+	h.operandaddr += uint16(h.Y)
+
+	if (h.operandaddr & 0xFF00) != (hi << 8) {
+		h.extracyclesaddr = true
+	} else {
+		h.extracyclesaddr = false
+	}
 }

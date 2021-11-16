@@ -92,8 +92,12 @@ func (h *H6502) BEQ() {
 	h.extracyclesinstr = false
 }
 
-//????
 func (h *H6502) BIT() {
+	h.Fetch()
+	h.setStat(Z, (h.A&h.fetched) == 0)
+	h.setStat(N, (h.fetched&0x80) > 0)
+	h.setStat(V, (h.fetched&0x40) > 0)
+	h.extracyclesinstr = false
 }
 
 func (h *H6502) BMI() {
@@ -132,9 +136,18 @@ func (h *H6502) BPL() {
 	h.extracyclesinstr = false
 }
 
-//????
 func (h *H6502) BRK() {
-
+	h.PC++
+	h.setStat(I, true)
+	h.write(0x0100+uint16(h.SP), uint8(h.PC>>8))
+	h.SP--
+	h.write(0x0100+uint16(h.SP), uint8(h.PC&0xFF))
+	h.setStat(B, true)
+	h.write(0x0100+uint16(h.SP), h.STATREG)
+	h.SP--
+	h.setStat(B, false)
+	h.PC = (uint16(h.read(0xFFFF)) << 8) | uint16(h.read(0xFFFE))
+	h.extracyclesinstr = false
 }
 
 func (h *H6502) BVC() {
@@ -267,9 +280,13 @@ func (h *H6502) JMP() {
 	h.extracyclesinstr = false
 }
 
-//STACK DATA:
 func (h *H6502) JSR() {
-
+	h.write((0x0100 + uint16(h.SP)), uint8((h.PC>>8)&0x00FF))
+	h.SP--
+	h.write((0x0100 + uint16(h.SP)), uint8(h.PC&0x00FF))
+	h.SP--
+	h.PC = h.operandaddr
+	h.extracyclesinstr = false
 }
 
 func (h *H6502) LDA() {
@@ -278,4 +295,204 @@ func (h *H6502) LDA() {
 	h.setStat(Z, h.A == 0)
 	h.setStat(N, (h.A&0x80) > 0)
 	h.extracyclesinstr = true
+}
+
+func (h *H6502) LDX() {
+	h.Fetch()
+	h.X = h.fetched
+	h.setStat(Z, h.X == 0)
+	h.setStat(N, (h.X&0x80) > 0)
+	h.extracyclesinstr = true
+}
+
+func (h *H6502) LDY() {
+	h.Fetch()
+	h.Y = h.fetched
+	h.setStat(Z, h.Y == 0)
+	h.setStat(N, (h.Y&0x80) > 0)
+	h.extracyclesinstr = true
+}
+
+func (h *H6502) LSR() {
+	h.Fetch()
+	temp := (h.fetched >> 1)
+	h.setStat(C, (h.fetched&0x01) > 0)
+	h.setStat(Z, temp == 0)
+	h.setStat(N, (temp&0x80) > 0)
+
+	if h.instruction.addrmode == modeIMP {
+		h.A = temp
+	} else {
+		h.write(h.operandaddr, temp)
+	}
+	h.extracyclesinstr = false
+}
+
+func (h *H6502) NOP() {
+	h.extracyclesinstr = false
+}
+
+func (h *H6502) ORA() {
+	h.Fetch()
+	h.A |= h.fetched
+	h.setStat(Z, h.A == 0)
+	h.setStat(N, (h.A&0x80) > 0)
+	h.extracyclesinstr = true
+}
+
+func (h *H6502) PHA() {
+	h.write(0x0100+uint16(h.SP), h.A)
+	h.SP--
+	h.extracyclesinstr = false
+}
+
+func (h *H6502) PPA() {
+	h.write(0x0100+uint16(h.SP), h.STATREG)
+	h.SP--
+	h.extracyclesinstr = false
+}
+
+func (h *H6502) PLA() {
+	h.A = h.read(uint16(h.SP))
+	h.SP++
+	h.setStat(Z, h.A == 0)
+	h.setStat(N, (h.A&0x80) > 0)
+	h.extracyclesinstr = false
+}
+
+func (h *H6502) PLP() {
+	h.STATREG = h.read(uint16(h.SP))
+	h.SP++
+	h.extracyclesinstr = false
+}
+
+func (h *H6502) ROL() {
+	h.Fetch()
+	temp := (h.fetched << 1) | btou(h.getStat(C))
+	h.setStat(C, (h.fetched&0x80) > 0)
+	h.setStat(Z, temp == 0)
+	h.setStat(N, temp&0x80 > 0)
+
+	if h.instruction.addrmode == modeIMP {
+		h.A = temp
+	} else {
+		h.write(h.operandaddr, temp)
+	}
+	h.extracyclesinstr = false
+}
+
+func (h *H6502) ROR() {
+	h.Fetch()
+	temp := (h.fetched >> 1) | (btou(h.getStat(C)) << 7)
+	h.setStat(C, (h.fetched&0x01) > 0)
+	h.setStat(Z, temp == 0)
+	h.setStat(N, (temp&0x80) > 0)
+
+	if h.instruction.addrmode == modeIMP {
+		h.A = temp
+	} else {
+		h.write(h.operandaddr, temp)
+	}
+	h.extracyclesinstr = false
+}
+
+func (h *H6502) RTI() {
+	h.SP++
+	h.STATREG = h.read(uint16(h.SP))
+	h.SP++
+	lo := h.read(uint16(h.SP))
+	h.SP++
+	hi := h.read(uint16(h.SP))
+	h.PC = (uint16(hi) << 8) | uint16(lo)
+	h.extracyclesinstr = false
+}
+
+func (h *H6502) RTS() {
+	h.SP++
+	lo := h.read(0x0100 + uint16(h.SP))
+	h.SP++
+	hi := h.read(0x0100 + uint16(h.SP))
+	h.PC = ((uint16(hi) << 8) | uint16(lo)) - 1
+	h.extracyclesinstr = false
+}
+
+func (h *H6502) SBC() {
+	h.Fetch()
+	var temp uint16 = uint16(h.A) + (uint16(h.fetched) ^ 0x00FF) + uint16(btou(h.getStat(C)))
+	h.setStat(C, (temp&0x100) > 0)
+	h.setStat(Z, (temp&0xFF) == 0)
+	h.setStat(V, ((uint16(h.A)^temp)&(^uint16(h.fetched)^temp)&0x80) > 0) //overflow flag
+	h.setStat(N, (temp&0x80) > 0)
+	h.A = uint8(temp & 0xFF)
+	h.extracyclesinstr = true
+}
+
+func (h *H6502) SEC() {
+	h.setStat(C, true)
+	h.extracyclesinstr = false
+}
+
+func (h *H6502) SED() {
+	h.setStat(D, true)
+	h.extracyclesinstr = false
+}
+
+func (h *H6502) SEI() {
+	h.setStat(I, true)
+	h.extracyclesinstr = false
+}
+
+func (h *H6502) STA() {
+	h.write(h.operandaddr, h.A)
+	h.extracyclesinstr = false
+}
+
+func (h *H6502) STX() {
+	h.write(h.operandaddr, h.X)
+	h.extracyclesinstr = false
+}
+
+func (h *H6502) STY() {
+	h.write(h.operandaddr, h.Y)
+	h.extracyclesinstr = false
+}
+
+func (h *H6502) TAX() {
+	h.X = h.A
+	h.setStat(Z, h.X == 0)
+	h.setStat(N, (h.X&0x80) > 0)
+	h.extracyclesinstr = false
+}
+
+func (h *H6502) TAY() {
+	h.Y = h.A
+	h.setStat(Z, h.Y == 0)
+	h.setStat(N, (h.Y&0x80) > 0)
+	h.extracyclesinstr = false
+}
+
+func (h *H6502) TSX() {
+	h.X = h.SP
+	h.setStat(Z, h.X == 0)
+	h.setStat(N, (h.X&0x80) > 0)
+	h.extracyclesinstr = false
+}
+
+func (h *H6502) TSA() {
+	h.A = h.X
+	h.setStat(Z, h.A == 0)
+	h.setStat(N, (h.A&0x80) > 0)
+	h.extracyclesinstr = false
+}
+
+func (h *H6502) TXS() {
+	h.SP = h.X
+	h.extracyclesinstr = false
+}
+
+func (h *H6502) TYA() {
+	h.A = h.Y
+	h.setStat(Z, h.A == 0)
+	h.setStat(N, (h.A&0x80) > 0)
+	h.extracyclesinstr = false
 }
