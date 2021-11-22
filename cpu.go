@@ -41,12 +41,14 @@ type H6502 struct {
 
 func (h *H6502) Clock() {
 	if h.cycles == 0 {
-		h.read(h.PC)
+		h.ReadInstruction(h.read(h.PC))
 		h.PC++
 		h.cycles = h.instruction.cycles
 
 		h.instruction.addrfunc(h)
 		h.instruction.instfunc(h)
+
+		h.cycles += btou(h.extracyclesaddr) & btou(h.extracyclesinstr)
 	}
 	h.cycles--
 }
@@ -70,14 +72,69 @@ func (h *H6502) getStat(stat uint8) bool {
 func (h *H6502) Reset() {
 	h.PC = 0x0000
 	h.SP = 0x00FF //do startup routine
+
+	h.operandaddr = 0xFFFA
+	lo := uint16(h.read(h.operandaddr))
+	hi := uint16(h.read(h.operandaddr + 1))
+	h.PC = (hi << 8) | lo
+
+	h.A = 0
+	h.X = 0
+	h.Y = 0
+	h.SP = 0xFD
+	h.STATREG = 0
+
+	h.operandaddr = 0
+	h.branchoffset = 0
+	h.fetched = 0
+
+	h.cycles = 8
 }
 
-func (h *H6502) Step() {
-	h.ReadInstruction(h.read(h.PC))
-	h.PC++
-	h.instruction.addrfunc(h)
-	h.instruction.instfunc(h)
-	h.Print()
+func (h *H6502) IRQ() {
+	if h.getStat(I) {
+		//push pc to stack
+		h.write(0x0100+uint16(h.SP), uint8(h.PC>>8))
+		h.SP--
+		h.write(0x0100+uint16(h.SP), uint8(h.PC&0xFF))
+		h.SP--
+
+		//push status register to stack
+		h.setStat(B, false)
+		h.setStat(I, true)
+		h.write(0x0100+uint16(h.SP), h.STATREG)
+		h.SP--
+
+		//read new program counter
+		h.operandaddr = 0xFFFE
+		lo := uint16(h.read(h.operandaddr))
+		hi := uint16(h.read(h.operandaddr + 1))
+		h.PC = (hi << 8) | lo
+
+		h.cycles = 7
+	}
+}
+
+func (h *H6502) NMI() {
+	//same as IRQ without able to be ignored
+	h.write(0x0100+uint16(h.SP), uint8(h.PC>>8))
+	h.SP--
+	h.write(0x0100+uint16(h.SP), uint8(h.PC&0xFF))
+	h.SP--
+
+	//push status register to stack
+	h.setStat(B, false)
+	h.setStat(I, true)
+	h.write(0x0100+uint16(h.SP), h.STATREG)
+	h.SP--
+
+	//read new program counter
+	h.operandaddr = 0xFFFA
+	lo := uint16(h.read(h.operandaddr))
+	hi := uint16(h.read(h.operandaddr + 1))
+	h.PC = (hi << 8) | lo
+
+	h.cycles = 7
 }
 
 func (h *H6502) connectBus(b *Bus) {

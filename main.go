@@ -3,7 +3,7 @@ package main
 func main() {
 	var bus Bus
 	var cpu H6502
-	cpu.Print()
+	cpu.PC = 0
 	cpu.connectBus(&bus)
 	bus.RAM[0x0000] = 0xA9 //LDA immediate
 	bus.RAM[0x0001] = 0xFF //LDA immediate value
@@ -12,7 +12,9 @@ func main() {
 	bus.RAM[0x0004] = 0xA9
 	bus.RAM[0x0005] = 0x00
 
-	cpu.Step()
-	cpu.Step()
-	cpu.Step()
+	cpu.Print()
+	for i := 0; i < 6; i++ {
+		cpu.Clock()
+		cpu.Print()
+	}
 }

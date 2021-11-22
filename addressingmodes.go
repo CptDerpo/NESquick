@@ -9,8 +9,10 @@ const (
 	modeABS
 	modeABX
 	modeABY
-	modeIND
+	modeIZX
+	modeIZY
 	modeREL
+	modeIND
 )
 
 //IMP and ACC
